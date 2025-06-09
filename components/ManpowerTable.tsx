@@ -1,19 +1,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { PiFileMagnifyingGlassBold } from 'react-icons/pi';
-
-import Spinner from '@/components/ui/Spinner';
-
-type Employee = {
-  deptcode: number;
-  deptname: string;
-  deptsbu: string;
-  deptstd: string;
-  countscan :number;
-  countnotscan: number;
-  countperson: number;
-  employeeId?: string;
-};
+import Spinner from './ui/Spinner'; // ถ้า Spinner อยู่ใน subfolder ของ components
+import { Employee } from '@/app/types/employee'; // <-- เปลี่ยน import path ให้ถูกต้อง
 
 type ManpowerTableProps = {
   selectedDate: string;
@@ -33,6 +22,8 @@ export function ManpowerTable({ selectedDate }: ManpowerTableProps) {
         if (!response.ok) {
           throw new Error('Failed to fetch employees');
         }
+        // คาดหวังว่า API นี้จะส่งข้อมูลที่ตรงกับ Type Employee[] โดยตรง
+        // หากไม่ตรง คุณจะต้อง map ข้อมูลดิบที่นี่
         const data: Employee[] = await response.json();
         setEmployees(data);
       } catch (err) {
@@ -87,7 +78,7 @@ export function ManpowerTable({ selectedDate }: ManpowerTableProps) {
         <tbody>
           {employees.map((emp, index) => (
             <tr
-              key={`${emp.deptcode}-${emp.employeeId ?? 'noempid'}-${index}`}
+              key={`${emp.deptcode}-${emp.employeeId || 'noempid'}-${index}`}
             >
               <td className="py-2 px-6">{emp.deptcode}</td>
               <td className="py-2 px-6">{emp.deptname}</td>
@@ -97,7 +88,8 @@ export function ManpowerTable({ selectedDate }: ManpowerTableProps) {
               <td className="py-2 px-6">{emp.countnotscan}</td>
               <td className="py-2 px-6">{emp.countperson}</td>
               <td className="p-3">
-                <Link href={`/api/attendance/report${emp.employeeId ?? ''}/page`}>
+                {/* ลิงก์ไปยังหน้า Report ของพนักงานแต่ละคน */}
+                <Link href={`/report/${emp.employeeId}`}>
                   <PiFileMagnifyingGlassBold
                     size={30}
                     className="text-blue-500 hover:text-blue-700"

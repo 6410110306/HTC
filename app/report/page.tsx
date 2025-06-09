@@ -5,6 +5,7 @@ import ReportFilterForm from '@/components/ReportFilterForm';
 import { DepartmentTable } from '@/components/DepartmentTable';
 import Spinner from '@/components/ui/Spinner';
 import Papa from 'papaparse';
+import { Employee, ReportApiRawData } from '../types/employee'; // ตรวจสอบ path ให้ถูกต้อง
 
 type Filters = {
   date: string;
@@ -12,26 +13,12 @@ type Filters = {
   employeeId: string;
 };
 
-type Record = {
-  workdate: string;
-  groupid: string;
-  groupname: string;
-  deptcode: number;
-  deptname: string;
-  deptsbu: string;
-  deptstd: string;
-  scan: number;
-  noscan: number;
-  late: number;
-  employeeId: string;
-};
-
 export default function ReportPage() {
-  const [records, setRecords] = useState<Record[]>([]);
+  const [records, setRecords] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
 
   const initialFilters: Filters = {
-    date: new Date().toISOString().slice(0, 10),  // ✅ ตั้งค่าเป็นวันที่ปัจจุบัน
+    date: new Date().toISOString().slice(0, 10),
     departmentId: '',
     employeeId: '',
   };
@@ -45,17 +32,46 @@ export default function ReportPage() {
       employeeId: newFilters.employeeId || '',
     }).toString();
 
-    const res = await fetch(`/api/attendance/report?${params}`);
-    const data = await res.json();
+    try {
+      const res = await fetch(`/api/attendance/report?${params}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to fetch report data');
+      }
+      const rawData: ReportApiRawData[] = await res.json();
 
-    if (Array.isArray(data)) {
-      setRecords(data);
-    } else {
-      console.error('Unexpected data format:', data);
+      const mappedRecords: Employee[] = rawData.map((rec) => {
+        // ใช้ parseInt เพื่อแปลงค่าจาก string เป็น number
+        // และใช้ || '0' เพื่อป้องกันค่า null/undefined ก่อนแปลง
+        const deptCodeNum = parseInt(rec.deptcode?.toString() || '0', 10);
+        const countScanNum = parseInt(rec.countscan || '0', 10);
+        const countNotScanNum = parseInt(rec.countnotscan || '0', 10);
+        const countPersonNum = parseInt(rec.countperson || '0', 10); // ใช้ค่าจาก API
+        const lateNum = parseInt(rec.late?.toString() || '0', 10); // ถ้า API มี late
+
+        return {
+          workdate: rec.workdate || '',
+          groupid: rec.groupid || '', // ต้องแน่ใจว่า API มี field นี้ หรือลบทิ้งถ้าไม่มี
+          groupname: rec.groupname || '', // ต้องแน่ใจว่า API มี field นี้ หรือลบทิ้งถ้าไม่มี
+          deptcode: deptCodeNum,
+          deptname: rec.deptname || '',
+          deptsbu: rec.deptsbu || '',
+          deptstd: rec.deptstd || '',
+          countscan: countScanNum,
+          countnotscan: countNotScanNum,
+          countperson: countPersonNum,
+          employeeId: rec.employeeId || '', // ต้องแน่ใจว่า API มี field นี้ หรือใช้ค่า default เช่น rec.deptcode + index
+          late: lateNum,
+        };
+      });
+
+      setRecords(mappedRecords);
+    } catch (err) {
+      console.error('Error fetching attendance report:', err);
       setRecords([]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleExportCSV = () => {
@@ -79,19 +95,7 @@ export default function ReportPage() {
         <div className="text-center text-gray-400">ไม่พบข้อมูล</div>
       ) : (
         <>
-          <DepartmentTable
-            employees={records.map((rec) => ({
-              workdate: rec.workdate || '',
-              deptcode: rec.deptcode,
-              deptname: rec.deptname,
-              deptsbu: rec.deptsbu || '',
-              deptstd: rec.deptstd || '',
-              countscan: rec.scan || 0,
-              countnotscan: rec.noscan || 0,
-              countperson: 1,
-              employeeId: rec.employeeId,
-            }))}
-          />
+          <DepartmentTable employees={records} />
           <button
             onClick={handleExportCSV}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
