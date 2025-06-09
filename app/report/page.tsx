@@ -18,7 +18,7 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(false);
 
   const initialFilters: Filters = {
-    date: new Date().toISOString().slice(0, 10),
+    date: new Date().toISOString().slice(0, 10),  // ✅ ตั้งค่าเป็นวันที่ปัจจุบัน
     departmentId: '',
     employeeId: '',
   };
