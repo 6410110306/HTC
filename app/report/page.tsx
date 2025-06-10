@@ -1,78 +1,84 @@
+// pages/ReportPage.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReportFilterForm from '@/components/ReportFilterForm';
-import { DepartmentTable } from '@/components/DepartmentTable';
+import { DepartmentTable } from '@/components/DepartmentTable'; // นำเข้า DepartmentTable
 import Spinner from '@/components/ui/Spinner';
 import Papa from 'papaparse';
-import { Employee, ReportApiRawData } from '../types/employee'; // ตรวจสอบ path ให้ถูกต้อง
+import { Employee, ReportApiRawData } from '../types/employee';
 
 type Filters = {
   date: string;
   departmentId: string;
-  employeeId: string;
+  employeeId: string; // ตรงนี้เก็บค่า scanStatus: 'all', 'scanned', 'not_scanned'
 };
 
 export default function ReportPage() {
   const [records, setRecords] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const initialFilters: Filters = {
-    date: new Date().toISOString().slice(0, 10),  // ✅ ตั้งค่าเป็นวันที่ปัจจุบัน
+  const [currentFilters, setCurrentFilters] = useState<Filters>(() => ({
+    date: new Date().toISOString().slice(0, 10),
     departmentId: '',
-    employeeId: '',
-  };
+    employeeId: 'all', // กำหนดค่าเริ่มต้นของสถานะสแกนเป็น 'all'
+  }));
 
   const handleSearch = async (newFilters: Filters) => {
-    setLoading(true);
-
-    const params = new URLSearchParams({
-      date: newFilters.date || '',
-      departmentId: newFilters.departmentId || '',
-      employeeId: newFilters.employeeId || '',
-    }).toString();
-
-    try {
-      const res = await fetch(`/api/attendance/report?${params}`);
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to fetch report data');
-      }
-      const rawData: ReportApiRawData[] = await res.json();
-
-      const mappedRecords: Employee[] = rawData.map((rec) => {
-        // ใช้ parseInt เพื่อแปลงค่าจาก string เป็น number
-        // และใช้ || '0' เพื่อป้องกันค่า null/undefined ก่อนแปลง
-        const deptCodeNum = parseInt(rec.deptcode?.toString() || '0', 10);
-        const countScanNum = parseInt(rec.countscan || '0', 10);
-        const countNotScanNum = parseInt(rec.countnotscan || '0', 10);
-        const countPersonNum = parseInt(rec.countperson || '0', 10); // ใช้ค่าจาก API
-        const lateNum = parseInt(rec.late?.toString() || '0', 10); // ถ้า API มี late
-
-        return {
-          workdate: rec.workdate || '',
-          groupid: rec.groupid || '', // ต้องแน่ใจว่า API มี field นี้ หรือลบทิ้งถ้าไม่มี
-          groupname: rec.groupname || '', // ต้องแน่ใจว่า API มี field นี้ หรือลบทิ้งถ้าไม่มี
-          deptcode: deptCodeNum,
-          deptname: rec.deptname || '',
-          deptsbu: rec.deptsbu || '',
-          deptstd: rec.deptstd || '',
-          countscan: countScanNum,
-          countnotscan: countNotScanNum,
-          countperson: countPersonNum,
-          employeeId: rec.employeeId || '', // ต้องแน่ใจว่า API มี field นี้ หรือใช้ค่า default เช่น rec.deptcode + index
-          late: lateNum,
-        };
-      });
-
-      setRecords(mappedRecords);
-    } catch (err) {
-      console.error('Error fetching attendance report:', err);
-      setRecords([]);
-    } finally {
-      setLoading(false);
-    }
+    console.log('Searching with filters:', newFilters);
+    setCurrentFilters(newFilters);
   };
+
+  useEffect(() => {
+    async function fetchReportData() {
+      setLoading(true);
+
+      const params = new URLSearchParams({
+        date: currentFilters.date || '',
+        departmentId: currentFilters.departmentId || '',
+        employeeId: currentFilters.employeeId || '', // ค่านี้คือ scanStatus
+      }).toString();
+
+      try {
+        const res = await fetch(`/api/attendance/report?${params}`);
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || 'Failed to fetch report data');
+        }
+        const rawData: ReportApiRawData[] = await res.json();
+
+        const mappedRecords: Employee[] = rawData.map((rec) => {
+          const deptCodeNum = parseInt(rec.deptcode?.toString() || '0', 10);
+          const countScanNum = parseInt(rec.countscan || '0', 10);
+          const countNotScanNum = parseInt(rec.countnotscan || '0', 10);
+          const countPersonNum = parseInt(rec.countperson || '0', 10);
+          const lateNum = parseInt(rec.late?.toString() || '0', 10);
+
+          return {
+            workdate: rec.workdate || '',
+            groupid: rec.groupid || '',
+            groupname: rec.groupname || '',
+            deptcode: deptCodeNum,
+            deptname: rec.deptname || '',
+            deptsbu: rec.deptsbu || '',
+            deptstd: rec.deptstd || '',
+            countscan: countScanNum,
+            countnotscan: countNotScanNum,
+            countperson: countPersonNum,
+            employeeId: rec.employeeId || '',
+          };
+        });
+        setRecords(mappedRecords);
+      } catch (err) {
+        console.error('Error fetching attendance report:', err);
+        setRecords([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchReportData();
+  }, [currentFilters]);
 
   const handleExportCSV = () => {
     const csv = Papa.unparse(records);
@@ -87,7 +93,7 @@ export default function ReportPage() {
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold">รายงานการเข้างาน</h1>
-      <ReportFilterForm onSearch={handleSearch} initialFilters={initialFilters} />
+      <ReportFilterForm onSearch={handleSearch} initialFilters={currentFilters} />
 
       {loading ? (
         <Spinner />
@@ -95,7 +101,11 @@ export default function ReportPage() {
         <div className="text-center text-gray-400">ไม่พบข้อมูล</div>
       ) : (
         <>
-          <DepartmentTable employees={records} />
+          {/* *** ส่งค่า scanStatus ไปให้ DepartmentTable *** */}
+          <DepartmentTable
+            employees={records}
+            scanStatus={currentFilters.employeeId} // ส่งสถานะสแกนที่เลือกไป
+          />
           <button
             onClick={handleExportCSV}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"

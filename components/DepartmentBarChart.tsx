@@ -13,9 +13,10 @@ import {
   type AnimationSpec,
 } from 'chart.js';
 import ZoomPlugin from 'chartjs-plugin-zoom';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import Spinner from '@/components/ui/Spinner';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, ZoomPlugin);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, ZoomPlugin, ChartDataLabels);
 
 type Props = {
   apiEndpoint: string;
@@ -83,7 +84,7 @@ export default function DepartmentBarChart({ apiEndpoint }: Props) {
   }
 
   if (data.length === 0) {
-    return <div className="text-center text-gray-500">ไม่มีข้อมูลแผนก</div>;
+    return <div className="text-center text-gray-500">ไม่พบข้อมูล</div>;
   }
 
   const chartData = {
@@ -135,6 +136,26 @@ export default function DepartmentBarChart({ apiEndpoint }: Props) {
           mode: 'x',
         },
       },
+      datalabels: {
+        display: (context) => {
+          const chart = context.chart;
+          const visibleLabels = chart.scales.x.ticks.length;
+          const isZoomedIn = visibleLabels <= 20;
+          return context.datasetIndex === 1 && isZoomedIn;
+        },
+        anchor: 'end',
+        align: 'end',
+        offset: 6,
+        color: '#878787',
+        font: {
+          weight: 'bold',
+        },
+        formatter: (value, context) => {
+          const scanned = data[context.dataIndex]?.scannedCount || 0;
+          const notScanned = data[context.dataIndex]?.notScannedCount || 0;
+          return scanned + notScanned;
+        },
+      },
     },
     animation: inView ? animationOptions : false,
     scales: {
@@ -159,9 +180,6 @@ export default function DepartmentBarChart({ apiEndpoint }: Props) {
 
   return (
     <div className="bg-white p-4 rounded-lg shadow" ref={chartContainerRef}>
-      <h2 className="text-lg font-semibold mb-4">
-        สรุปจำนวนพนักงานแต่ละแผนก (สแกนเข้า / ยังไม่สแกน)
-      </h2>
       <div style={{ height: '500px' }}>
         <Bar data={chartData} options={options} />
       </div>
